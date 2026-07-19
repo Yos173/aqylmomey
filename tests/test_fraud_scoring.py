@@ -1,4 +1,4 @@
-from bot.services.fraud_scoring import score_text, template_explanation, rule_labels
+from bot.services.fraud_scoring import score_text, score_to_verdict, template_explanation, rule_labels
 
 
 def test_clean_message_is_low_risk():
@@ -73,3 +73,27 @@ def test_template_explanation_lists_labels():
     labels = rule_labels(result.triggered_rules)
     for label in labels:
         assert label in explanation
+
+
+def test_kaspi_code_phishing_triggers_sensitive_info_request():
+    result = score_text("Пришлите код подтверждения Kaspi, чтобы отменить платёж")
+    assert "sensitive_info_request" in result.triggered_rules
+
+
+def test_kaspi_giveaway_scam_triggers_easy_money_scheme():
+    result = score_text("Поздравляем! Вы выиграли в розыгрыше Kaspi, заберите приз")
+    assert "easy_money_scheme" in result.triggered_rules
+
+
+def test_kaspi_phrases_do_not_false_positive_on_unrelated_text():
+    result = score_text("Оплатил обед через Kaspi, всё как обычно")
+    assert result.triggered_rules == []
+
+
+def test_score_to_verdict_boundaries():
+    assert score_to_verdict(0) == "low"
+    assert score_to_verdict(24) == "low"
+    assert score_to_verdict(25) == "medium"
+    assert score_to_verdict(59) == "medium"
+    assert score_to_verdict(60) == "high"
+    assert score_to_verdict(100) == "high"

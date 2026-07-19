@@ -37,6 +37,9 @@ _RULES: list[tuple[str, int, list[str]]] = [
             r"пароль от (личного кабинета|карты|приложения)",
             r"переведи(те)? (деньги )?на карту",
             r"реквизиты (карты|счета)",
+            r"код (подтверждения|из) kaspi",
+            r"логин.{0,10}(пароль)?.{0,10}kaspi",
+            r"данные (карты|счета) kaspi",
         ],
     ),
     (
@@ -58,6 +61,8 @@ _RULES: list[tuple[str, int, list[str]]] = [
             r"работа на дому без опыта.{0,15}(доход|\$|тенге|рубл)",
             r"пригласи друга и получи",
             r"финансовая пирамида",
+            r"выигр\w*.{0,20}kaspi",
+            r"kaspi.{0,20}(розыгрыш\w*|акци\w*|подар\w*)",
         ],
     ),
 ]
@@ -81,7 +86,16 @@ _RULE_LABELS = {
     "sensitive_info_request": "запрос конфиденциальных данных или перевода денег",
     "suspicious_link": "подозрительная сокращённая/нетипичная ссылка",
     "easy_money_scheme": "схема 'лёгких денег' / пирамиды",
+    "ai_detected": "дополнительно обнаружено ИИ (не по чётким правилам)",
 }
+
+
+def score_to_verdict(score: int) -> str:
+    if score < 25:
+        return "low"
+    if score < 60:
+        return "medium"
+    return "high"
 
 
 def score_text(text: str) -> FraudResult:
@@ -93,14 +107,7 @@ def score_text(text: str) -> FraudResult:
             total += weight
 
     score = min(total, 100)
-    if score < 25:
-        verdict = "low"
-    elif score < 60:
-        verdict = "medium"
-    else:
-        verdict = "high"
-
-    return FraudResult(score=score, verdict=verdict, triggered_rules=triggered)
+    return FraudResult(score=score, verdict=score_to_verdict(score), triggered_rules=triggered)
 
 
 def rule_labels(triggered_rules: list[str]) -> list[str]:

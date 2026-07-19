@@ -28,7 +28,7 @@ async def cb_open_antifraud(callback: CallbackQuery, state: FSMContext) -> None:
 async def handle_fraud_text(message: Message, state: FSMContext, config: Config) -> None:
     text = message.text or ""
     result = score_text(text)
-    await log_fraud_check(config.db_path, message.from_user.id, result.score, result.verdict)
+    await log_fraud_check(config.db_path, message.from_user.id, result.score, result.verdict, result.triggered_rules)
 
     explanation = await explain_fraud_signals(config.anthropic_api_key, text, result)
     if explanation is None:

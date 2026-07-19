@@ -1,7 +1,8 @@
 from aiogram import F, Router
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message, WebAppInfo
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.config import Config
 from bot.db import ensure_user
@@ -18,12 +19,26 @@ WELCOME_TEXT = (
     "Выберите раздел:"
 )
 
+WELCOME_TEXT_WEBAPP = (
+    "👋 Привет! Это <b>AqylMoney</b> — бот по финансовой грамотности хакатона Tech Vision.\n\n"
+    "Нажмите кнопку ниже, чтобы открыть приложение прямо в Telegram."
+)
+
+
+def _webapp_keyboard(webapp_url: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="🚀 Открыть AqylMoney", web_app=WebAppInfo(url=webapp_url))
+    return builder.as_markup()
+
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext, config: Config) -> None:
     await state.clear()
     await ensure_user(config.db_path, message.from_user.id, message.from_user.username)
-    await message.answer(WELCOME_TEXT, reply_markup=main_menu())
+    if config.webapp_url:
+        await message.answer(WELCOME_TEXT_WEBAPP, reply_markup=_webapp_keyboard(config.webapp_url))
+    else:
+        await message.answer(WELCOME_TEXT, reply_markup=main_menu())
 
 
 @router.callback_query(F.data == "menu:root")

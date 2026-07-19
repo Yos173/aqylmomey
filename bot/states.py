@@ -12,3 +12,5 @@ class BudgetStates(StatesGroup):
 
 class InvestStates(StatesGroup):
     quiz_in_progress = State()
+    waiting_for_buy_amount = State()
+    waiting_for_sell_amount = State()

@@ -2,29 +2,77 @@ import asyncio
 
 import yfinance as yf
 
-# Реальные биржевые инструменты (глобальные ETF/акции) — цены настоящие,
-# деньги пользователя виртуальные. Подобраны без API-ключа через yfinance.
-TICKER_NAMES = {
-    "VOO": "Vanguard S&P 500 ETF",
-    "QQQ": "Invesco QQQ (Nasdaq-100)",
-    "VXUS": "Vanguard Total International Stock ETF",
-    "BND": "Vanguard Total Bond Market ETF",
-    "VTIP": "Vanguard Short-Term Inflation-Protected Securities ETF",
-    "GLD": "SPDR Gold Shares",
+# Реальные биржевые инструменты — цены настоящие (через yfinance, без API-ключа),
+# деньги пользователя виртуальные. category: "fund" (биржевой фонд) или "stock" (акция).
+INSTRUMENTS: dict[str, dict[str, str]] = {
+    "VOO": {"name": "Vanguard S&P 500 ETF", "category": "fund"},
+    "QQQ": {"name": "Invesco QQQ (Nasdaq-100)", "category": "fund"},
+    "VXUS": {"name": "Vanguard Total International Stock ETF", "category": "fund"},
+    "BND": {"name": "Vanguard Total Bond Market ETF", "category": "fund"},
+    "VTIP": {"name": "Vanguard Short-Term Inflation-Protected Securities ETF", "category": "fund"},
+    "GLD": {"name": "SPDR Gold Shares", "category": "fund"},
+    "AAPL": {"name": "Apple Inc.", "category": "stock"},
+    "MSFT": {"name": "Microsoft Corp.", "category": "stock"},
+    "GOOGL": {"name": "Alphabet Inc. (Google)", "category": "stock"},
+    "AMZN": {"name": "Amazon.com Inc.", "category": "stock"},
+    "TSLA": {"name": "Tesla Inc.", "category": "stock"},
+    "NVDA": {"name": "NVIDIA Corp.", "category": "stock"},
+    # Казахстанские компании — Kaspi.kz торгуется напрямую на NASDAQ (IPO январь 2024),
+    # Halyk Bank и Kazatomprom — через GDR на Лондонской бирже (доступны в yfinance с суффиксом .L).
+    "KSPI": {"name": "Kaspi.kz", "category": "local"},
+    "HSBK.L": {"name": "Halyk Bank", "category": "local"},
+    "KAP.L": {"name": "Kazatomprom", "category": "local"},
 }
 
+CATEGORY_TITLES = {"fund": "Фонды (ETF)", "stock": "Акции", "local": "🇰🇿 Казахстан"}
 
-def _fetch_price_sync(ticker: str) -> float | None:
+TICKER_NAMES = {ticker: info["name"] for ticker, info in INSTRUMENTS.items()}
+
+
+def tickers_by_category(category: str) -> list[str]:
+    return [ticker for ticker, info in INSTRUMENTS.items() if info["category"] == category]
+
+
+def _fetch_quote_sync(ticker: str) -> dict | None:
     data = yf.Ticker(ticker).history(period="5d")
     if data.empty:
         return None
-    return float(data["Close"].iloc[-1])
+    closes = data["Close"]
+    price = float(closes.iloc[-1])
+    prev = float(closes.iloc[-2]) if len(closes) > 1 else price
+    change_pct = ((price - prev) / prev * 100) if prev else 0.0
+    return {"price": price, "change_pct": change_pct}
+
+
+async def get_quote(ticker: str) -> dict | None:
+    """Текущая цена + изменение за последний торговый день, в процентах."""
+    return await asyncio.to_thread(_fetch_quote_sync, ticker)
+
+
+async def get_quotes(tickers: list[str]) -> dict[str, dict | None]:
+    results = await asyncio.gather(*(get_quote(t) for t in tickers))
+    return dict(zip(tickers, results))
 
 
 async def get_price(ticker: str) -> float | None:
-    return await asyncio.to_thread(_fetch_price_sync, ticker)
+    quote = await get_quote(ticker)
+    return quote["price"] if quote else None
 
 
 async def get_prices(tickers: list[str]) -> dict[str, float | None]:
-    results = await asyncio.gather(*(get_price(t) for t in tickers))
-    return dict(zip(tickers, results))
+    quotes = await get_quotes(tickers)
+    return {ticker: (quote["price"] if quote else None) for ticker, quote in quotes.items()}
+
+
+def _fetch_history_sync(ticker: str, period: str) -> list[dict] | None:
+    data = yf.Ticker(ticker).history(period=period)
+    if data.empty:
+        return None
+    return [
+        {"time": index.strftime("%Y-%m-%d"), "value": float(row["Close"])} for index, row in data.iterrows()
+    ]
+
+
+async def get_history(ticker: str, period: str = "3mo") -> list[dict] | None:
+    """История цен закрытия для графика: [{"time": "YYYY-MM-DD", "value": price}, ...]."""
+    return await asyncio.to_thread(_fetch_history_sync, ticker, period)

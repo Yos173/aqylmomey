@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>AqylMoney</title>
+<link rel="stylesheet" href="/static/styles.css" />
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://unpkg.com/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+<div id="onboarding-overlay" class="overlay hidden">
+  <div class="overlay-card">
+    <h2>Добро пожаловать 👋</h2>
+    <p class="hint">Придумайте ник и укажите школу — понадобится для рейтинга и бэйджей. Без пароля, 10 секунд.</p>
+    <input type="text" id="onboarding-nickname" placeholder="Ник" maxlength="50" />
+    <input type="text" id="onboarding-school" placeholder="Школа / ВУЗ (необязательно)" maxlength="200" />
+    <input type="text" id="onboarding-grade" placeholder="Класс / курс (необязательно)" maxlength="20" />
+    <button class="btn primary" id="onboarding-submit-btn">Начать</button>
+  </div>
+</div>
+
+<div id="app">
+  <header class="app-header">
+    <div class="header-nav">
+      <a href="/" class="header-link">← На главную</a>
+      <a href="/radar" class="header-link">🔴 Radar</a>
+    </div>
+    <h1>AqylMoney</h1>
+    <p class="app-subtitle">Финансовая грамотность — обучающий режим</p>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab-btn active" data-tab="antifraud">🛡 Антифрод</button>
+    <button class="tab-btn" data-tab="budget">💰 Бюджет</button>
+    <button class="tab-btn" data-tab="invest">📈 Инвестиции</button>
+    <button class="tab-btn" data-tab="rating">🏆 Рейтинг</button>
+    <button class="tab-btn" data-tab="assistant">🤖 AI-помощник</button>
+  </nav>
+
+  <main id="content">
+    <!-- Antifraud -->
+    <section class="tab-panel active" id="panel-antifraud">
+      <p class="hint">Пришлите текст подозрительного сообщения или объявления — проверим на признаки мошенничества.</p>
+      <textarea id="antifraud-text" rows="5" placeholder="Например: Инвестируй 10000 тенге и получи 50000 за неделю, только сегодня!"></textarea>
+      <button class="btn primary" id="antifraud-check-btn">Проверить текст</button>
+      <div class="upload-row">
+        <label class="btn secondary" for="antifraud-image-input">📷 Загрузить скриншот</label>
+        <input type="file" id="antifraud-image-input" accept="image/*" class="hidden" />
+      </div>
+      <div id="antifraud-result" class="result-box hidden"></div>
+    </section>
+
+    <!-- Budget -->
+    <section class="tab-panel" id="panel-budget">
+      <div class="card" id="budget-summary-card">
+        <div class="skeleton">Загрузка баланса...</div>
+      </div>
+
+      <div class="form-row">
+        <h3>Добавить операцию</h3>
+        <div class="segmented" id="budget-kind">
+          <button class="segmented-btn active" data-kind="income">➕ Доход</button>
+          <button class="segmented-btn" data-kind="expense">➖ Расход</button>
+        </div>
+        <input type="number" id="budget-amount" placeholder="Сумма, тенге" inputmode="decimal" />
+        <input type="text" id="budget-category" placeholder="Категория (например: еда)" />
+        <button class="btn primary" id="budget-add-btn">Добавить</button>
+      </div>
+    </section>
+
+    <!-- Invest -->
+    <section class="tab-panel" id="panel-invest">
+      <div class="sub-tabs" id="invest-subtabs">
+        <button class="sub-tab-btn active" data-subtab="portfolio">Портфель</button>
+        <button class="sub-tab-btn" data-subtab="markets">Рынки</button>
+      </div>
+
+      <div class="sub-panel active" id="invest-portfolio">
+        <div id="portfolio-content"><div class="skeleton">Загрузка портфеля...</div></div>
+      </div>
+
+      <div class="sub-panel" id="invest-markets">
+        <div class="segmented" id="market-category"></div>
+        <div id="markets-list"><div class="skeleton">Загрузка котировок...</div></div>
+      </div>
+
+      <div class="sub-panel" id="invest-instrument">
+        <button class="btn ghost" id="instrument-back-btn">⬅️ К списку</button>
+        <div id="instrument-content"></div>
+      </div>
+
+      <div class="sub-panel" id="invest-quiz">
+        <div id="quiz-content"></div>
+      </div>
+    </section>
+
+    <!-- Rating: financial IQ quiz, badges, leaderboard -->
+    <section class="tab-panel" id="panel-rating">
+      <div class="sub-tabs" id="rating-subtabs">
+        <button class="sub-tab-btn active" data-subtab="quiz">IQ-квиз</button>
+        <button class="sub-tab-btn" data-subtab="badges">Бэйджи</button>
+        <button class="sub-tab-btn" data-subtab="leaderboard">Рейтинг</button>
+      </div>
+
+      <div class="sub-panel active" id="rating-quiz">
+        <div id="fiq-content"><div class="skeleton">Загрузка...</div></div>
+      </div>
+      <div class="sub-panel" id="rating-badges">
+        <div id="badges-content"><div class="skeleton">Загрузка...</div></div>
+      </div>
+      <div class="sub-panel" id="rating-leaderboard">
+        <p class="hint">В рейтинге участвуют пользователи веб-версии (с ником и школой).</p>
+        <div id="leaderboard-content"><div class="skeleton">Загрузка...</div></div>
+      </div>
+    </section>
+
+    <!-- AI-помощник: коуч по финансам + советник по мошенничеству, один чат без истории -->
+    <section class="tab-panel" id="panel-assistant">
+      <p class="hint">
+        Спросите про бюджет, инвестиции или подозрительное предложение — AI-помощник объяснит и предупредит,
+        на что не стоит вестись.
+      </p>
+      <textarea id="assistant-question" rows="4" placeholder="Например: стоит ли вкладывать все деньги в одну акцию?"></textarea>
+      <button class="btn primary" id="assistant-ask-btn">Спросить</button>
+      <div id="assistant-result" class="result-box hidden"></div>
+    </section>
+  </main>
+
+  <p class="disclaimer">
+    ⚠️ Инвест-симулятор — обучающий инструмент на реальных рыночных данных с виртуальными деньгами.
+    Это не инвестиционная рекомендация и не реальные торговые операции.
+  </p>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

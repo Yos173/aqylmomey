@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>AqylMoney — финансовая грамотность для школьников Казахстана</title>
+<link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body class="landing-body">
+<div class="landing">
+  <section class="hero">
+    <p class="hero-kicker">🇰🇿 Tech Vision 2026 — FinTech &amp; Literacy</p>
+    <h1>AqylMoney</h1>
+    <p class="hero-subtitle">
+      Учим школьников и студентов Казахстана распознавать финансовое мошенничество, вести бюджет
+      и разбираться в инвестициях — на реальных рыночных данных, но с виртуальными деньгами.
+    </p>
+    <p class="hero-stat" id="hero-stat">Загружаем статистику…</p>
+    <div class="hero-actions">
+      <a class="btn primary hero-btn" href="/app">🚀 Попробовать AqylMoney</a>
+      <a class="btn secondary hero-btn" href="/radar">🔴 Смотреть Фрод-радар</a>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="feature-card">
+      <div class="feature-icon">🛡</div>
+      <h3>Антифрод</h3>
+      <p>
+        Присылаете подозрительное сообщение — независимый rule-based алгоритм оценивает риск по
+        конкретным признакам (нереалистичная доходность, давление срочностью, запрос кода из СМС).
+        Можно также загрузить скриншот переписки — Claude распознает текст, а решение всё равно
+        принимает тот же прозрачный движок.
+      </p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">💰</div>
+      <h3>Бюджет</h3>
+      <p>Простой трекер доходов и расходов в тенге — видно, куда уходят деньги, и на чём можно сэкономить.</p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">📈</div>
+      <h3>Инвест-симулятор</h3>
+      <p>
+        Риск-квиз собирает модельный портфель, а «Рынки» дают купить/продать акции, ETF и
+        казахстанские бумаги (Kaspi.kz, Halyk Bank, Kazatomprom) по реальным ценам — деньги виртуальные.
+      </p>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon">🏆</div>
+      <h3>Рейтинг школ</h3>
+      <p>Финансовый IQ-квиз, бэйджи за прогресс и рейтинг по школам и классам — соревнуйтесь, а не просто учитесь.</p>
+    </div>
+  </section>
+
+  <footer class="landing-footer">
+    ⚠️ Инвест-симулятор — обучающий инструмент с виртуальными деньгами. Это не инвестиционная рекомендация.
+  </footer>
+</div>
+
+<script>
+  fetch("/api/radar/stats")
+    .then((r) => r.json())
+    .then((data) => {
+      const el = document.getElementById("hero-stat");
+      el.textContent = `Уже выявлено ${data.total_checks.toLocaleString("ru-RU")} попыток мошенничества`;
+    })
+    .catch(() => {
+      document.getElementById("hero-stat").textContent = "Проверьте своё сообщение прямо сейчас";
+    });
+</script>
+</body>
+</html>
