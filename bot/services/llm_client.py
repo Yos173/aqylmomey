@@ -1,8 +1,11 @@
 import json
+import logging
 
 from anthropic import AsyncAnthropic
 
 from bot.services.fraud_scoring import FraudResult, rule_labels
+
+logger = logging.getLogger(__name__)
 
 MODEL = "claude-opus-4-8"
 
@@ -35,6 +38,7 @@ async def explain_fraud_signals(api_key: str | None, message_text: str, result: 
             messages=[{"role": "user", "content": user_prompt}],
         )
     except Exception:
+        logger.exception("explain_fraud_signals: запрос к Claude не удался")
         return None
 
     if response.stop_reason == "refusal":
@@ -81,6 +85,7 @@ async def transcribe_scam_image(api_key: str | None, image_base64: str, media_ty
             ],
         )
     except Exception:
+        logger.exception("transcribe_scam_image: запрос к Claude не удался")
         return None
 
     if response.stop_reason == "refusal":
@@ -145,9 +150,11 @@ async def assess_fraud_risk(api_key: str | None, message_text: str, result: Frau
             messages=[{"role": "user", "content": user_prompt}],
         )
     except Exception:
+        logger.exception("assess_fraud_risk: запрос к Claude не удался")
         return None
 
     if response.stop_reason == "refusal":
+        logger.warning("assess_fraud_risk: Claude отказался отвечать (stop_reason=refusal)")
         return None
 
     for block in response.content:
@@ -156,11 +163,13 @@ async def assess_fraud_risk(api_key: str | None, message_text: str, result: Frau
         try:
             data = json.loads(block.text)
         except (json.JSONDecodeError, TypeError):
+            logger.warning("assess_fraud_risk: не удалось распарсить JSON от Claude: %r", block.text[:300])
             return None
 
         score = data.get("score")
         explanation = data.get("explanation")
         if not isinstance(score, (int, float)) or not isinstance(explanation, str) or not explanation.strip():
+            logger.warning("assess_fraud_risk: ответ Claude не прошёл валидацию: %r", data)
             return None
 
         red_flags = data.get("red_flags")
@@ -206,6 +215,7 @@ async def ask_assistant(api_key: str | None, question: str, radar_top_categories
             messages=[{"role": "user", "content": user_prompt}],
         )
     except Exception:
+        logger.exception("ask_assistant: запрос к Claude не удался")
         return None
 
     if response.stop_reason == "refusal":
