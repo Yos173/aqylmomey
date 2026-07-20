@@ -91,6 +91,15 @@
       data = null;
     }
     if (!response.ok) {
+      if (response.status === 401 && sessionToken) {
+        // Сессия ссылается на web_users, которых больше нет (например, база сбросилась при
+        // передеплое на Render — диск эфемерный) — сбрасываем токен и просим онбординг заново
+        // вместо того, чтобы пользователь навсегда застрял на ошибке "недействительный токен".
+        localStorage.removeItem(SESSION_TOKEN_KEY);
+        localStorage.removeItem(SESSION_NICKNAME_KEY);
+        location.reload();
+        throw new Error("Сессия устарела — обновляю страницу...");
+      }
       const detail = (data && data.detail) || `Ошибка запроса (${response.status})`;
       throw new Error(detail);
     }
