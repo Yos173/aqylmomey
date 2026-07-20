@@ -76,13 +76,24 @@ CREATE TABLE IF NOT EXISTS financial_iq_scores (
 _clients: dict[str, libsql_client.Client] = {}
 
 
+def _https_url(url: str) -> str:
+    """create_client() резолвит "libsql://" в WebSocket (wss://) — у Turso это рукопожатие
+    иногда рвётся с 400 Invalid response status из-за версии Hrana-протокола в архивном пакете
+    libsql-client. HTTP-транспорт (Hrana поверх HTTPS) даёт тот же функционал без этой проблемы.
+    """
+    for prefix, replacement in (("libsql://", "https://"), ("wss://", "https://"), ("ws://", "http://")):
+        if url.startswith(prefix):
+            return replacement + url[len(prefix):]
+    return url
+
+
 def _get_client(db_path: str) -> libsql_client.Client:
     turso_url = os.getenv("TURSO_DATABASE_URL")
     key = turso_url or db_path
     client = _clients.get(key)
     if client is None:
         if turso_url:
-            client = libsql_client.create_client(turso_url, auth_token=os.getenv("TURSO_AUTH_TOKEN"))
+            client = libsql_client.create_client(_https_url(turso_url), auth_token=os.getenv("TURSO_AUTH_TOKEN"))
         else:
             client = libsql_client.create_client(f"file:{db_path}")
         _clients[key] = client
