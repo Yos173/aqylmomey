@@ -1,7 +1,6 @@
 import json
 import logging
 
-import httpx
 from anthropic import AsyncAnthropic
 
 from bot.services.fraud_scoring import FraudResult, rule_labels
@@ -10,14 +9,9 @@ logger = logging.getLogger(__name__)
 
 MODEL = "claude-opus-4-8"
 
-# На Render исходящий IPv6 периодически "висит" и рвётся с anthropic.APIConnectionError,
-# хотя IPv4 до api.anthropic.com работает нормально — local_address="0.0.0.0" заставляет
-# httpx резолвить и коннектиться только по IPv4.
-_HTTP_CLIENT = httpx.AsyncClient(transport=httpx.AsyncHTTPTransport(local_address="0.0.0.0"))
-
 
 def _client(api_key: str) -> AsyncAnthropic:
-    return AsyncAnthropic(api_key=api_key, http_client=_HTTP_CLIENT)
+    return AsyncAnthropic(api_key=api_key)
 
 
 _SYSTEM_PROMPT = (

@@ -21,9 +21,13 @@ def load_config() -> Config:
         raise RuntimeError(
             "TELEGRAM_BOT_TOKEN не задан. Скопируйте .env.example в .env и вставьте токен от @BotFather."
         )
+    # Хостинги вроде Render иногда сохраняют переменную окружения с хвостовым переносом строки
+    # (например, если ключ копировали из терминала) — такой символ делает HTTP-заголовок
+    # авторизации нелегальным и httpx роняет запрос с непонятным "Connection error".
+    anthropic_key = (os.getenv("ANTHROPIC_API_KEY") or "").strip() or None
     return Config(
-        bot_token=token,
-        anthropic_api_key=os.getenv("ANTHROPIC_API_KEY") or None,
+        bot_token=token.strip(),
+        anthropic_api_key=anthropic_key,
         db_path=os.getenv("DB_PATH", "aqylmoney.db"),
         webapp_url=(os.getenv("WEBAPP_URL") or None),
         # Хостинги вроде Render/Railway сами назначают порт через $PORT — уважаем его,
