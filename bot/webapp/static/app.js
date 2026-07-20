@@ -147,6 +147,10 @@
       tabButtons.forEach((b) => b.classList.toggle("active", b === btn));
       const target = btn.dataset.tab;
       tabPanels.forEach((panel) => panel.classList.toggle("active", panel.id === `panel-${target}`));
+      if (target !== "invest") {
+        stopMarketsPolling();
+        stopInstrumentPolling();
+      }
       if (target === "budget") loadBudgetSummary();
       if (target === "invest" && !investOpened) {
         investOpened = true;
@@ -317,6 +321,54 @@
   let currentInstrumentReturnTo = "markets";
   let activeChart = null;
 
+  // ---------- Живые котировки: пока вкладка "Рынки" или карточка инструмента открыты, тихо
+  // обновляем цены каждые ~17 сек. Сервер сам кэширует котировки на 2 минуты (см. market_data.py),
+  // так что частый опрос с фронта не бьёт лишний раз в Yahoo Finance и не рискует rate-limit.
+  const LIVE_POLL_MS = 17000;
+  let marketsPollTimer = null;
+  let instrumentPollTimer = null;
+  let currentInstrumentTicker = null;
+
+  function stopMarketsPolling() {
+    if (marketsPollTimer) {
+      clearInterval(marketsPollTimer);
+      marketsPollTimer = null;
+    }
+  }
+
+  function startMarketsPolling() {
+    stopMarketsPolling();
+    marketsPollTimer = setInterval(async () => {
+      if (document.hidden) return;
+      try {
+        marketsCache = await api("/api/invest/markets");
+        renderMarketsList();
+      } catch (err) {
+        // Тихий фоновый рефреш — на экране просто остаются последние известные цены.
+      }
+    }, LIVE_POLL_MS);
+  }
+
+  function stopInstrumentPolling() {
+    if (instrumentPollTimer) {
+      clearInterval(instrumentPollTimer);
+      instrumentPollTimer = null;
+    }
+  }
+
+  function startInstrumentPolling(ticker) {
+    stopInstrumentPolling();
+    instrumentPollTimer = setInterval(async () => {
+      if (document.hidden) return;
+      try {
+        const data = await api(`/api/invest/instrument/${encodeURIComponent(ticker)}`);
+        updateInstrumentPrice(data);
+      } catch (err) {
+        // Тихий фоновый рефреш.
+      }
+    }, LIVE_POLL_MS);
+  }
+
   investSubtabButtons.forEach((btn) => {
     btn.addEventListener("click", () => showInvestSubtab(btn.dataset.subtab));
   });
@@ -324,14 +376,20 @@
   function showInvestSubtab(name) {
     investSubtabButtons.forEach((b) => b.classList.toggle("active", b.dataset.subtab === name));
     investSubpanels.forEach((panel) => panel.classList.toggle("active", panel.id === `invest-${name}`));
+    stopMarketsPolling();
+    stopInstrumentPolling();
     if (name === "portfolio") loadPortfolio();
-    if (name === "markets") loadMarkets();
+    if (name === "markets") {
+      loadMarkets();
+      startMarketsPolling();
+    }
   }
 
   function showInstrumentPanel(returnTo) {
     currentInstrumentReturnTo = returnTo;
     investSubtabButtons.forEach((b) => b.classList.remove("active"));
     investSubpanels.forEach((panel) => panel.classList.toggle("active", panel.id === "invest-instrument"));
+    stopMarketsPolling();
   }
 
   document.getElementById("instrument-back-btn").addEventListener("click", () => {
@@ -480,24 +538,36 @@
 
   async function openInstrument(ticker, returnTo) {
     showInstrumentPanel(returnTo);
+    currentInstrumentTicker = ticker;
     const container = document.getElementById("instrument-content");
     container.innerHTML = '<div class="skeleton">Загрузка...</div>';
     try {
       const data = await api(`/api/invest/instrument/${encodeURIComponent(ticker)}`);
       renderInstrument(data);
+      startInstrumentPolling(ticker);
     } catch (err) {
       container.innerHTML = `<div class="skeleton">${escapeHtml(err.message)}</div>`;
     }
   }
 
+  function renderPriceSlot(data) {
+    return data.price === null
+      ? '<p class="hint">Цена сейчас недоступна, попробуйте позже.</p>'
+      : `<div class="row"><span class="row-title">Цена</span><span class="row-value">${formatUsd(data.price)}
+          <span class="pill ${data.change_pct >= 0 ? "up" : "down"}">${formatPct(data.change_pct, 2)}</span></span></div>`;
+  }
+
+  function updateInstrumentPrice(data) {
+    // Пользователь мог уже уйти с этой карточки, пока летел запрос — не затираем чужой экран.
+    if (data.ticker !== currentInstrumentTicker) return;
+    const slot = document.getElementById("instrument-price-slot");
+    if (slot) slot.innerHTML = renderPriceSlot(data);
+  }
+
   function renderInstrument(data) {
     const container = document.getElementById("instrument-content");
     const categoryLabel = data.category === "stock" ? "Акция" : "Фонд (ETF)";
-    const priceHtml =
-      data.price === null
-        ? '<p class="hint">Цена сейчас недоступна, попробуйте позже.</p>'
-        : `<div class="row"><span class="row-title">Цена</span><span class="row-value">${formatUsd(data.price)}
-            <span class="pill ${data.change_pct >= 0 ? "up" : "down"}">${formatPct(data.change_pct, 2)}</span></span></div>`;
+    const priceHtml = `<div id="instrument-price-slot">${renderPriceSlot(data)}</div>`;
     const heldHtml =
       data.held_shares > 1e-9
         ? `<div class="row"><span class="row-title">У вас</span><span class="row-value">${data.held_shares.toFixed(4)} шт.</span></div>`
@@ -771,13 +841,59 @@
         .filter((b) => b.earned)
         .map((b) => `<span class="badge-chip">${b.icon} ${escapeHtml(b.title)}</span>`)
         .join("");
+      const mistakes = result.review || [];
+      const reviewToggleHtml = mistakes.length
+        ? `<button class="btn secondary" id="fiq-review-btn">📖 Разбор ошибок (${mistakes.length})</button>`
+        : `<p class="hint" style="margin-top:12px;">Все ответы верные — отличный результат! 🎉</p>`;
+
       container.innerHTML = `
         <div class="card">
           <p>✅ Результат: <strong>${result.score}/${result.total}</strong></p>
           ${earnedHtml ? `<p class="hint" style="margin-top:12px;">Заработанные бэйджи:</p><div class="badge-row">${earnedHtml}</div>` : ""}
+          ${reviewToggleHtml}
+          <div id="fiq-review-list" class="hidden" style="margin-top:12px;"></div>
+        </div>
+        <div class="card">
+          <p class="hint">Хотите разобрать ошибки подробнее или узнать что-то новое по теме?</p>
+          <button class="btn secondary" id="fiq-ask-ai-btn">🤖 Спросить AI-помощника</button>
         </div>
         <button class="btn secondary" id="fiq-retry-btn">Пройти ещё раз</button>
       `;
+
+      const reviewBtn = document.getElementById("fiq-review-btn");
+      if (reviewBtn) {
+        reviewBtn.addEventListener("click", () => {
+          const listEl = document.getElementById("fiq-review-list");
+          const wasHidden = listEl.classList.contains("hidden");
+          if (wasHidden) {
+            listEl.innerHTML = mistakes
+              .map(
+                (m) => `
+                  <div class="list-item" style="display:block;">
+                    <div class="row-title">${escapeHtml(m.question)}</div>
+                    ${m.your_answer ? `<div class="row-sub">Ваш ответ: ${escapeHtml(m.your_answer)}</div>` : ""}
+                    <div class="row-sub">Правильно: ${escapeHtml(m.correct_answer)}</div>
+                    <div class="hint" style="margin-top:4px;">${escapeHtml(m.explanation)}</div>
+                  </div>
+                `
+              )
+              .join("");
+          }
+          listEl.classList.toggle("hidden", !wasHidden);
+          reviewBtn.textContent = wasHidden ? "📖 Скрыть разбор" : `📖 Разбор ошибок (${mistakes.length})`;
+        });
+      }
+
+      document.getElementById("fiq-ask-ai-btn").addEventListener("click", () => {
+        const question = mistakes.length
+          ? `Я ошибся в финансовом квизе по темам: ${mistakes.map((m) => m.question).join(" / ")}. Объясни эти темы простыми словами и приведи примеры.`
+          : "Я прошёл финансовый квиз без ошибок — расскажи что-нибудь новое и полезное про личные финансы или инвестиции.";
+        const assistantTabBtn = document.querySelector('.tab-btn[data-tab="assistant"]');
+        if (assistantTabBtn) assistantTabBtn.click();
+        assistantQuestionEl.value = question;
+        assistantQuestionEl.focus();
+      });
+
       document.getElementById("fiq-retry-btn").addEventListener("click", loadFinancialQuiz);
     } catch (err) {
       container.innerHTML = `<div class="skeleton">${escapeHtml(err.message)}</div>`;

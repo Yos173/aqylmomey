@@ -25,7 +25,7 @@ from bot.db import (
     replace_holding,
 )
 from bot.services.badges import compute_badges
-from bot.services.financial_quiz import public_questions, score_quiz
+from bot.services.financial_quiz import public_questions, review_quiz, score_quiz
 from bot.services.fraud_scoring import VERDICT_TITLES, rule_labels, score_text, score_to_verdict, template_explanation
 from bot.services.llm_client import assess_fraud_risk, ask_assistant, transcribe_scam_image
 from bot.services.market_data import (
@@ -436,7 +436,7 @@ def build_api_router(config: Config) -> APIRouter:
         correct, total = score_quiz(payload.answers)
         await record_quiz_score(config.db_path, user["id"], correct, total)
         badges = await compute_badges(config.db_path, user["id"])
-        return {"score": correct, "total": total, "badges": badges}
+        return {"score": correct, "total": total, "badges": badges, "review": review_quiz(payload.answers)}
 
     @router.get("/leaderboard")
     async def leaderboard(school: str | None = None) -> dict:
@@ -457,7 +457,14 @@ def build_api_router(config: Config) -> APIRouter:
         radar = await get_radar_stats(config.db_path)
         top_categories = [rule_labels([item["rule"]])[0] for item in radar["top_categories"]]
 
-        answer = await ask_assistant(config.anthropic_api_key, payload.question, top_categories)
+        quotes = await get_quotes(list(INSTRUMENTS.keys()))
+        market_snapshot = [
+            f"{ticker} ({INSTRUMENTS[ticker]['name']}): ${quote['price']:.2f} ({quote['change_pct']:+.1f}%)"
+            for ticker, quote in quotes.items()
+            if quote is not None
+        ]
+
+        answer = await ask_assistant(config.anthropic_api_key, payload.question, top_categories, market_snapshot)
         if answer is None:
             raise HTTPException(status_code=502, detail="AI-помощник сейчас недоступен, попробуйте позже")
         return {"answer": answer}
